@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AssetVault Pro — Sistem Manajemen Aset & Peminjaman</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        :root { --pico-font-size: 14.5px; }
+        body { background-color: #f1f5f9; min-height: 100vh; }
+        
+        /* Login Screen */
+        .login-wrapper { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
+        .login-card { background: #fff; padding: 2rem; border-radius: 14px; width: 100%; max-width: 390px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.25); text-align: center; }
+        .company-logo { width: 56px; height: 56px; object-fit: contain; border-radius: 10px; background: #f8fafc; padding: 4px; border: 1px solid #e2e8f0; }
+
+        /* Navbar & Tabs */
+        .navbar { background: #fff; border-bottom: 1px solid #e2e8f0; padding: 0.75rem 0; position: sticky; top: 0; z-index: 20; }
+        .nav-inner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; }
+        .brand-box { display: flex; align-items: center; gap: 0.75rem; }
+        .nav-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; background: #f1f5f9; padding: 0.3rem; border-radius: 10px; }
+        .nav-tab { padding: 0.45rem 0.9rem; border-radius: 7px; font-size: 0.85rem; font-weight: 600; cursor: pointer; border: none; background: transparent; color: #475569; margin: 0; }
+        .nav-tab.active { background: #fff; color: #0284c7; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+        /* KPI & Panels */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1.25rem 0; }
+        .kpi-card { background: #fff; padding: 1.1rem; border-radius: 10px; border: 1px solid #e2e8f0; }
+        .kpi-label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; }
+        .kpi-value { font-size: 1.4rem; font-weight: 700; color: #0f172a; margin-top: 0.2rem; }
+        .kpi-sub { font-size: 0.78rem; color: #64748b; margin-top: 0.2rem; }
+        .panel { background: #fff; padding: 1.25rem; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 1.25rem; }
+
+        /* Badges */
+        .badge { padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.74rem; font-weight: 600; display: inline-block; }
+        .badge-baik { background: #dcfce7; color: #166534; }
+        .badge-dipinjam { background: #dbeafe; color: #1e40af; }
+        .badge-perbaikan { background: #fef9c3; color: #854d0e; }
+        .badge-rusak { background: #fee2e2; color: #991b1b; }
+
+        /* Progress Bar */
+        .bar-track { background: #f1f5f9; height: 8px; border-radius: 99px; overflow: hidden; margin-top: 4px; }
+        .bar-fill { background: #0284c7; height: 100%; border-radius: 99px; }
+
+        /* Filters & Buttons */
+        .filter-bar { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+        @media (max-width: 768px) { .filter-bar { grid-template-columns: 1fr; } }
+        table th { font-size: 0.76rem; text-transform: uppercase; color: #475569; }
+        .actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+        .btn-sm { padding: 0.25rem 0.55rem; font-size: 0.78rem; margin: 0; }
+        .qr-box { display: flex; flex-direction: column; align-items: center; padding: 1.25rem; border: 2px dashed #cbd5e1; border-radius: 12px; background: #fff; text-align: center; }
+        .timeline-item { border-left: 2px solid #cbd5e1; padding-left: 1rem; margin-bottom: 0.85rem; position: relative; }
+        .timeline-item::before { content: ''; width: 10px; height: 10px; background: #0284c7; border-radius: 50%; position: absolute; left: -6px; top: 4px; }
+        .tag-pill { display: inline-flex; align-items: center; gap: 0.4rem; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 0.25rem 0.65rem; border-radius: 999px; font-size: 0.82rem; margin: 0.2rem; }
+    </style>
+</head>
+<body x-data="assetApp()" x-init="initApp()">
+
+<!-- ==================== 1. HALAMAN LOGIN ==================== -->
+<template x-if="!isAuthenticated">
+    <div class="login-wrapper">
+        <div class="login-card">
+            <template x-if="settings.logo">
+                <img :src="settings.logo" alt="Logo" class="company-logo" style="width:68px; height:68px; margin:0 auto 0.75rem;">
+            </template>
+            <template x-if="!settings.logo">
+                <div style="width:64px; height:64px; background:#0284c7; color:#fff; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:1.6rem; font-weight:800; margin:0 auto 0.75rem;">AV</div>
+            </template>
+            <h4 style="margin-bottom:0.2rem;" x-text="settings.companyName"></h4>
+            <p style="font-size:0.85rem; color:#64748b; margin-bottom:1.25rem;" x-text="settings.companySubtitle"></p>
+
+            <form @submit.prevent="handleLogin()">
+                <input type="password" x-model="loginInput" placeholder="Masukkan Password (Default: 555)" autofocus required style="text-align:center; font-size:1.1rem; letter-spacing:0.15em;">
+                <p style="color:#dc2626; font-size:0.82rem; margin-top:-0.5rem;" x-show="loginError" x-text="loginError"></p>
+                <button type="submit" style="width:100%; margin-top:0.25rem;">Masuk ke Sistem</button>
+            </form>
+            <small style="color:#94a3b8; display:block; margin-top:1rem;">Password awal: <strong>555</strong></small>
+        </div>
+    </div>
+</template>
+
+<!-- ==================== 2. APLIKASI UTAMA ==================== -->
+<template x-if="isAuthenticated">
+    <div>
+        <!-- Top Navigation Bar -->
+        <header class="navbar">
+            <div class="container nav-inner">
+                <div class="brand-box">
+                    <template x-if="settings.logo">
+                        <img :src="settings.logo" alt="Logo" class="company-logo" style="width:40px; height:40px;">
+                    </template>
+                    <div>
+                        <strong style="font-size:1.05rem; display:block; line-height:1.2;" x-text="settings.companyName"></strong>
+                        <small style="color:#64748b; font-size:0.78rem;" x-text="settings.companySubtitle"></small>
+                    </div>
+                </div>
+
+                <!-- Menu Navigasi Utama -->
+                <nav class="nav-tabs">
+                    <button class="nav-tab" :class="{ 'active': activeTab === 'dashboard' }" @click="switchTab('dashboard')">Dashboard & Aset</button>
+                    <button class="nav-tab" :class="{ 'active': activeTab === 'loans' }" @click="switchTab('loans')">
+                        Peminjaman <span class="badge badge-dipinjam" style="margin-left:3px;" x-show="activeLoansCount > 0" x-text="activeLoansCount"></span>
+                    </button>
+                    <button class="nav-tab" :class="{ 'active': activeTab === 'scanner' }" @click="switchTab('scanner')">Scan Barcode / QR</button>
+                    <button class="nav-tab" :class="{ 'active': activeTab === 'settings' }" @click="switchTab('settings')">Settings</button>
+                </nav>
+
+                <div style="display:flex; gap:0.4rem;">
+                    <button class="outline secondary btn-sm" @click="logout()">Keluar</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="container" style="padding-top: 0.5rem; padding-bottom: 2rem;">
+
+            <!-- ==================== TAB 1: DASHBOARD & INVENTARIS ==================== -->
+            <div x-show="activeTab === 'dashboard'">
+                <!-- KPI Cards -->
+                <section class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Nilai Perolehan</div>
+                        <div class="kpi-value" x-text="formatRupiah(summary.totalValue)"></div>
+                        <div class="kpi-sub">Nilai Buku: <strong x-text="formatRupiah(summary.totalBookValue)"></strong></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Unit Aset</div>
+                        <div class="kpi-value"><span x-text="summary.totalItems"></span> <small style="font-size:0.85rem; font-weight:400;">unit</small></div>
+                        <div class="kpi-sub"><span x-text="summary.countBaik"></span> Baik • <span x-text="summary.countDipinjam"></span> Dipinjam</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Sedang Dipinjam</div>
+                        <div class="kpi-value" style="color:#2563eb;" x-text="summary.countDipinjam"></div>
+                        <div class="kpi-sub"><a href="#" @click.prevent="switchTab('loans')">Lihat daftar peminjam →</a></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Perbaikan / Rusak</div>
+                        <div class="kpi-value">
+                            <span style="color:#d97706;" x-text="summary.countPerbaikan"></span> <small style="color:#94a3b8;">/</small>
+                            <span style="color:#dc2626;" x-text="summary.countRusak"></span>
+                        </div>
+                        <div class="kpi-sub">Perlu tindak lanjut teknis</div>
+                    </div>
+                </section>
+
+                <!-- Distribusi Kategori -->
+                <section class="panel" x-show="byCategory.length > 0">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                        <h6 style="margin:0; color:#334155;">Distribusi Nilai per Kategori</h6>
+                        <div style="display:flex; gap:0.5rem;">
+                            <button class="outline secondary btn-sm" @click="exportCsv()">Export CSV</button>
+                            <button class="btn-sm" @click="openFormModal()">+ Tambah Aset</button>
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+                        <template x-for="cat in byCategory" :key="cat.category">
+                            <div>
+                                <div style="display:flex; justify-content:space-between; font-size:0.83rem;">
+                                    <strong x-text="cat.category"></strong>
+                                    <span x-text="formatRupiah(cat.totalValue) + ' (' + cat.total + ')'"></span>
+                                </div>
+                                <div class="bar-track">
+                                    <div class="bar-fill" :style="`width: ${summary.totalValue > 0 ? (cat.totalValue / summary.totalValue * 100) : 0}%`"></div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </section>
+
+                <!-- Tabel Inventaris -->
+                <section class="panel">
+                    <div class="filter-bar">
+                        <input type="search" placeholder="Cari kode, nama aset, lokasi, atau PIC..." x-model="filters.q" style="margin:0;">
+                        <select x-model="filters.category" style="margin:0;">
+                            <option value="">Semua Kategori</option>
+                            <template x-for="c in settings.categories" :key="c">
+                                <option :value="c" x-text="c"></option>
+                            </template>
+                        </select>
+                        <select x-model="filters.condition" style="margin:0;">
+                            <option value="">Semua Status</option>
+                            <option value="Baik">Baik (Tersedia)</option>
+                            <option value="Dipinjam">Dipinjam</option>
+                            <option value="Perbaikan">Perbaikan</option>
+                            <option value="Rusak">Rusak</option>
+                        </select>
+                    </div>
+
+                    <div class="overflow-auto">
+                        <table class="striped">
+                            <thead>
+                                <tr>
+                                    <th>Kode</th>
+                                    <th>Nama Aset</th>
+                                    <th>Lokasi & PIC</th>
+                                    <th>Status</th>
+                                    <th>Nilai Beli / Buku</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-if="filteredAssets.length === 0">
+                                    <tr><td colspan="6" style="text-align:center; color:#64748b;">Tidak ada data aset ditemukan.</td></tr>
+                                </template>
+                                <template x-for="item in filteredAssets" :key="item.id">
+                                    <tr>
+                                        <td>
+                                            <a href="#" @click.prevent="openDetailModal(item.asset_code)" style="font-weight:700;" x-text="item.asset_code"></a>
+                                        </td>
+                                        <td>
+                                            <div x-text="item.name"></div>
+                                            <small style="color:#64748b;" x-text="item.category"></small>
+                                        </td>
+                                        <td>
+                                            <div x-text="item.location"></div>
+                                            <small style="color:#64748b;" x-text="'PIC: ' + item.pic"></small>
+                                        </td>
+                                        <td>
+                                            <span class="badge"
+                                                  :class="{
+                                                      'badge-baik': item.condition === 'Baik',
+                                                      'badge-dipinjam': item.condition === 'Dipinjam',
+                                                      'badge-perbaikan': item.condition === 'Perbaikan',
+                                                      'badge-rusak': item.condition === 'Rusak'
+                                                  }"
+                                                  x-text="item.condition"></span>
+                                        </td>
+                                        <td>
+                                            <div x-text="formatRupiah(item.value)"></div>
+                                            <small style="color:#0284c7;" x-text="'Buku: ' + formatRupiah(calcBookValue(item))"></small>
+                                        </td>
+                                        <td>
+                                            <div class="actions">
+                                                <button class="outline btn-sm" @click="openLabelModal(item)" title="Cetak QR & Barcode">Barcode/QR</button>
+                                                <button class="outline btn-sm" @click="openDetailModal(item.asset_code)">Log</button>
+                                                <button class="outline btn-sm" x-show="item.condition === 'Baik'" @click="quickLoan(item)">Pinjam</button>
+                                                <button class="outline secondary btn-sm" @click="openFormModal(item)">Edit</button>
+                                                <button class="outline secondary btn-sm" @click="deleteAsset(item)">Hapus</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ==================== TAB 2: PEMINJAMAN ASET ==================== -->
+            <div x-show="activeTab === 'loans'" style="margin-top:1.25rem;">
+                <div class="grid">
+                    <!-- Form Peminjaman Baru -->
+                    <section class="panel">
+                        <h5 style="margin-bottom:0.75rem;">Form Peminjaman Aset</h5>
+                        <form @submit.prevent="submitLoan()">
+                            <label>Pilih Aset Tersedia (Status Baik) *
+                                <select x-model="loanForm.asset_code" required>
+                                    <option value="">-- Pilih Aset --</option>
+                                    <template x-for="a in availableAssets" :key="a.id">
+                                        <option :value="a.asset_code" x-text="`${a.asset_code} — ${a.name} (${a.location})`"></option>
+                                    </template>
+                                </select>
+                            </label>
+                            <div class="grid">
+                                <label>Nama Peminjam *
+                                    <input type="text" x-model="loanForm.borrower" placeholder="Contoh: Budi Santoso" required>
+                                </label>
+                                <label>Divisi / Departemen *
+                                    <input type="text" x-model="loanForm.department" placeholder="Contoh: Front Office / Sales" required>
+                                </label>
+                            </div>
+                            <div class="grid">
+                                <label>Tanggal Pinjam
+                                    <input type="date" x-model="loanForm.loan_date" required>
+                                </label>
+                                <label>Rencana Kembali
+                                    <input type="date" x-model="loanForm.due_date" required>
+                                </label>
+                            </div>
+                            <label>Keperluan Peminjaman
+                                <input type="text" x-model="loanForm.purpose" placeholder="Event ballroom, dinas luar, dll.">
+                            </label>
+                            <button type="submit" style="width:100%;">Proses Peminjaman</button>
+                        </form>
+                    </section>
+
+                    <!-- Daftar Peminjaman Aktif & Riwayat -->
+                    <section class="panel">
+                        <h5 style="margin-bottom:0.75rem;">Daftar Transaksi Peminjaman</h5>
+                        <div class="overflow-auto">
+                            <table class="striped">
+                                <thead>
+                                    <tr>
+                                        <th>Aset</th>
+                                        <th>Peminjam</th>
+                                        <th>Jadwal</th>
+                                        <th>Status</th>
+                                        <th>Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-if="loans.length === 0">
+                                        <tr><td colspan="5" style="text-align:center; color:#64748b;">Belum ada riwayat peminjaman.</td></tr>
+                                    </template>
+                                    <template x-for="l in loans" :key="l.id">
+                                        <tr>
+                                            <td>
+                                                <strong x-text="l.asset_code"></strong>
+                                                <div style="font-size:0.82rem;" x-text="l.asset_name"></div>
+                                            </td>
+                                            <td>
+                                                <div x-text="l.borrower"></div>
+                                                <small style="color:#64748b;" x-text="l.department"></small>
+                                            </td>
+                                            <td style="font-size:0.8rem;">
+                                                <div>Pinjam: <span x-text="l.loan_date"></span></div>
+                                                <div>Kembali: <span x-text="l.due_date"></span></div>
+                                            </td>
+                                            <td>
+                                                <span class="badge" :class="l.status === 'Dipinjam' ? 'badge-dipinjam' : 'badge-baik'" x-text="l.status"></span>
+                                            </td>
+                                            <td>
+                                                <button class="btn-sm outline" x-show="l.status === 'Dipinjam'" @click="returnLoan(l)">Kembalikan</button>
+                                                <small style="color:#64748b;" x-show="l.status === 'Dikembalikan'" x-text="l.returned_at"></small>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- ==================== TAB 3: BARCODE & QR SCANNER ==================== -->
+            <div x-show="activeTab === 'scanner'" style="margin-top:1.25rem;">
+                <section class="panel" style="max-width: 640px; margin: 0 auto;">
+                    <h5 style="margin-bottom:0.25rem;">Scan Barcode / QR Code Aset</h5>
+                    <p style="font-size:0.85rem; color:#64748b; margin-bottom:1rem;">
+                        Gunakan kamera perangkat untuk memindai QR/Barcode, atau tembak langsung menggunakan <strong>USB/Bluetooth Barcode Scanner</strong> pada kolom di bawah.
+                    </p>
+
+                    <!-- Input Manual / Hardware Barcode Gun -->
+                    <form @submit.prevent="searchByScanCode()" style="display:flex; gap:0.5rem; margin-bottom:1rem;">
+                        <input type="text" id="hardware-scan-input" x-model="manualScanCode" placeholder="Scan / ketik kode aset (misal: AST-001) lalu Enter..." style="margin:0;">
+                        <button type="submit" style="width:auto; margin:0; white-space:nowrap;">Cek Aset</button>
+                    </form>
+
+                    <!-- Kamera Scanner Area -->
+                    <div style="text-align:center; background:#f8fafc; padding:1rem; border-radius:10px; border:1px dashed #cbd5e1;">
+                        <div id="reader" style="width:100%; max-width:420px; margin:0 auto;"></div>
+                        <div style="margin-top:0.75rem; display:flex; justify-content:center; gap:0.5rem;">
+                            <button type="button" class="btn-sm" x-show="!scannerRunning" @click="startCameraScanner()">Aktifkan Kamera Scanner</button>
+                            <button type="button" class="btn-sm secondary outline" x-show="scannerRunning" @click="stopCameraScanner()">Matikan Kamera</button>
+                        </div>
+                        <small style="color:#64748b; display:block; margin-top:0.5rem;">
+                            Catatan: Akses kamera di browser membutuhkan koneksi HTTPS (GitHub Pages sudah HTTPS secara otomatis).
+                        </small>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ==================== TAB 4: SETTINGS (PENGATURAN) ==================== -->
+            <div x-show="activeTab === 'settings'" style="margin-top:1.25rem;">
+                <div class="grid">
+                    <!-- Identitas Perusahaan & Logo -->
+                    <section class="panel">
+                        <h5 style="margin-bottom:0.75rem;">Identitas Perusahaan & Logo</h5>
+                        <form @submit.prevent="saveSettings()">
+                            <label>Nama Perusahaan / Instansi
+                                <input type="text" x-model="settings.companyName" required>
+                            </label>
+                            <label>Subjudul / Alamat Singkat
+                                <input type="text" x-model="settings.companySubtitle">
+                            </label>
+                            <div class="grid">
+                                <label>Prefix Kode Aset Otomatis
+                                    <input type="text" x-model="settings.assetPrefix" placeholder="AST-">
+                                </label>
+                                <label>Ganti Password Login
+                                    <input type="text" x-model="settings.password" required>
+                                </label>
+                            </div>
+                            <label>Upload Logo Perusahaan (PNG/JPG)
+                                <input type="file" accept="image/*" @change="handleLogoUpload($event)">
+                            </label>
+                            <div x-show="settings.logo" style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem;">
+                                <img :src="settings.logo" class="company-logo">
+                                <button type="button" class="outline secondary btn-sm" @click="settings.logo = ''; saveSettings()">Hapus Logo</button>
+                            </div>
+                            <button type="submit" style="width:100%;">Simpan Pengaturan</button>
+                        </form>
+                    </section>
+
+                    <!-- Master Kategori & Reset Data -->
+                    <section class="panel">
+                        <h5 style="margin-bottom:0.75rem;">Kelola Kategori Aset</h5>
+                        <form @submit.prevent="addCategory()" style="display:flex; gap:0.5rem; margin-bottom:1rem;">
+                            <input type="text" x-model="newCategoryName" placeholder="Nama kategori baru..." required style="margin:0;">
+                            <button type="submit" style="width:auto; margin:0; white-space:nowrap;">+ Tambah</button>
+                        </form>
+
+                        <div style="margin-bottom:1.5rem;">
+                            <template x-for="(cat, idx) in settings.categories" :key="cat">
+                                <span class="tag-pill">
+                                    <span x-text="cat"></span>
+                                    <a href="#" @click.prevent="removeCategory(idx)" style="color:#dc2626; font-weight:bold; text-decoration:none;">×</a>
+                                </span>
+                            </template>
+                        </div>
+
+                        <hr>
+                        <h6 style="color:#dc2626;">Zona Reset Demo</h6>
+                        <p style="font-size:0.82rem; color:#64748b;">Kembalikan seluruh data aset, peminjaman, dan pengaturan ke kondisi awal (Password kembali ke 555).</p>
+                        <button type="button" class="outline secondary btn-sm" @click="resetAllData()">Reset Semua Data ke Awal</button>
+                    </section>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- ==================== MODAL 1: FORM TAMBAH / EDIT ASET ==================== -->
+        <dialog :open="formModalOpen">
+            <article style="max-width: 560px; width: 100%;">
+                <header>
+                    <button aria-label="Close" rel="prev" @click="formModalOpen = false"></button>
+                    <strong x-text="form.id ? 'Edit Data Aset' : 'Tambah Aset Baru'"></strong>
+                </header>
+                <form @submit.prevent="saveAsset()">
+                    <div class="grid">
+                        <label>Kode Aset *
+                            <input type="text" x-model="form.asset_code" required>
+                        </label>
+                        <label>Kategori *
+                            <select x-model="form.category" required>
+                                <template x-for="c in settings.categories" :key="c">
+                                    <option :value="c" x-text="c"></option>
+                                </template>
+                            </select>
+                        </label>
+                    </div>
+                    <label>Nama Aset *
+                        <input type="text" x-model="form.name" required>
+                    </label>
+                    <div class="grid">
+                        <label>Lokasi Penempatan *
+                            <input type="text" x-model="form.location" required>
+                        </label>
+                        <label>Penanggung Jawab (PIC)
+                            <input type="text" x-model="form.pic">
+                        </label>
+                    </div>
+                    <div class="grid">
+                        <label>Status / Kondisi
+                            <select x-model="form.condition">
+                                <option value="Baik">Baik</option>
+                                <option value="Dipinjam">Dipinjam</option>
+                                <option value="Perbaikan">Perbaikan</option>
+                                <option value="Rusak">Rusak</option>
+                            </select>
+                        </label>
+                        <label>Tanggal Perolehan
+                            <input type="date" x-model="form.purchase_date">
+                        </label>
+                    </div>
+                    <div class="grid">
+                        <label>Nilai Perolehan (Rp)
+                            <input type="number" step="1000" min="0" x-model="form.value">
+                        </label>
+                        <label>Masa Manfaat (Tahun)
+                            <input type="number" min="1" max="50" x-model="form.useful_life">
+                        </label>
+                    </div>
+                    <label>Catatan / Serial Number
+                        <input type="text" x-model="form.notes">
+                    </label>
+                    <p style="color:#dc2626; font-size:0.85rem;" x-show="errorMsg" x-text="errorMsg"></p>
+                    <footer style="display:flex; justify-content:flex-end; gap:0.5rem;">
+                        <button type="button" class="secondary outline" @click="formModalOpen = false">Batal</button>
+                        <button type="submit">Simpan Aset</button>
+                    </footer>
+                </form>
+            </article>
+        </dialog>
+
+        <!-- ==================== MODAL 2: CETAK BARCODE & QR LABEL ==================== -->
+        <dialog :open="labelModalOpen">
+            <article style="max-width: 420px; width: 100%;">
+                <header>
+                    <button aria-label="Close" rel="prev" @click="labelModalOpen = false"></button>
+                    <strong>Label QR & Barcode Aset</strong>
+                </header>
+                <div class="qr-box" id="printable-label">
+                    <small style="font-weight:700; color:#475569; text-transform:uppercase;" x-text="settings.companyName"></small>
+                    <strong style="font-size:1.15rem; margin:0.15rem 0;" x-text="labelAsset.asset_code"></strong>
+                    <div style="font-size:0.85rem; color:#334155; margin-bottom:0.75rem;" x-text="labelAsset.name"></div>
+                    
+                    <!-- QR Code -->
+                    <div id="qrcode-container" style="padding:6px; background:#fff;"></div>
+                    
+                    <!-- Barcode 1D -->
+                    <svg id="barcode-container" style="margin-top:0.5rem; max-width:100%;"></svg>
+                    
+                    <small style="color:#64748b; margin-top:0.35rem;" x-text="'Lokasi: ' + labelAsset.location"></small>
+                </div>
+                <footer style="display:flex; justify-content:space-between; gap:0.5rem; margin-top:1rem;">
+                    <button type="button" class="outline secondary" @click="downloadQr()">Download QR PNG</button>
+                    <button type="button" @click="printLabel()">Cetak Stiker</button>
+                </footer>
+            </article>
+        </dialog>
+
+        <!-- ==================== MODAL 3: DETAIL SCAN & RIWAYAT LOG ==================== -->
+        <dialog :open="detailModalOpen">
+            <article style="max-width: 620px; width: 100%;">
+                <header>
+                    <button aria-label="Close" rel="prev" @click="closeDetailModal()"></button>
+                    <strong>Detail & Riwayat Aset (<span x-text="detailAsset.asset_code"></span>)</strong>
+                </header>
+
+                <div style="background:#f8fafc; padding:1rem; border-radius:8px; margin-bottom:1.25rem; border:1px solid #e2e8f0;">
+                    <div style="display:flex; justify-content:space-between; align-items:start;">
+                        <div>
+                            <h5 style="margin:0;" x-text="detailAsset.name"></h5>
+                            <small style="color:#64748b;" x-text="detailAsset.category + ' • Beli: ' + detailAsset.purchase_date"></small>
+                        </div>
+                        <span class="badge"
+                              :class="{
+                                  'badge-baik': detailAsset.condition === 'Baik',
+                                  'badge-dipinjam': detailAsset.condition === 'Dipinjam',
+                                  'badge-perbaikan': detailAsset.condition === 'Perbaikan',
+                                  'badge-rusak': detailAsset.condition === 'Rusak'
+                              }"
+                              x-text="detailAsset.condition"></span>
+                    </div>
+                    <hr style="margin:0.75rem 0;">
+                    <div class="grid" style="font-size:0.85rem;">
+                        <div><strong>Lokasi:</strong> <span x-text="detailAsset.location"></span></div>
+                        <div><strong>PIC:</strong> <span x-text="detailAsset.pic"></span></div>
+                    </div>
+                    <div class="grid" style="font-size:0.85rem; margin-top:0.35rem;">
+                        <div><strong>Nilai Beli:</strong> <span x-text="formatRupiah(detailAsset.value)"></span></div>
+                        <div><strong>Nilai Buku:</strong> <span x-text="formatRupiah(calcBookValue(detailAsset))"></span></div>
+                    </div>
+                </div>
+
+                <form @submit.prevent="saveLog()" style="margin-bottom:1.5rem;">
+                    <strong style="font-size:0.9rem; display:block; margin-bottom:0.5rem;">+ Catat Aktivitas / Update Kondisi</strong>
+                    <div class="grid">
+                        <select x-model="logForm.action_type" required>
+                            <option value="Inspeksi Rutin">Inspeksi Rutin</option>
+                            <option value="Perbaikan">Perbaikan / Servis</option>
+                            <option value="Mutasi Lokasi">Mutasi Lokasi</option>
+                            <option value="Serah Terima">Serah Terima PIC</option>
+                        </select>
+                        <select x-model="logForm.new_condition">
+                            <option value="">-- Status Tetap --</option>
+                            <option value="Baik">Ubah ke: Baik</option>
+                            <option value="Perbaikan">Ubah ke: Perbaikan</option>
+                            <option value="Rusak">Ubah ke: Rusak</option>
+                        </select>
+                    </div>
+                    <div class="grid">
+                        <input type="text" x-model="logForm.new_location" placeholder="Lokasi baru (opsional)">
+                        <input type="number" min="0" step="1000" x-model="logForm.cost" placeholder="Biaya servis Rp (opsional)">
+                    </div>
+                    <div style="display:flex; gap:0.5rem;">
+                        <input type="text" x-model="logForm.description" placeholder="Keterangan aktivitas..." required style="margin:0;">
+                        <button type="submit" style="width:auto; margin:0; white-space:nowrap;">Simpan Log</button>
+                    </div>
+                </form>
+
+                <strong style="font-size:0.9rem; display:block; margin-bottom:0.75rem;">Riwayat Kronologis</strong>
+                <div style="max-height: 220px; overflow-y: auto; padding-left: 0.25rem;">
+                    <template x-for="log in (detailAsset.logs || [])" :key="log.id">
+                        <div class="timeline-item">
+                            <div style="display:flex; justify-content:space-between; font-size:0.82rem;">
+                                <strong x-text="log.action_type"></strong>
+                                <small style="color:#64748b;" x-text="log.created_at"></small>
+                            </div>
+                            <div style="font-size:0.85rem; color:#334155;" x-text="log.description"></div>
+                            <small style="color:#0284c7;" x-show="Number(log.cost) > 0" x-text="'Biaya: ' + formatRupiah(log.cost)"></small>
+                        </div>
+                    </template>
+                </div>
+            </article>
+        </dialog>
+    </div>
+</template>
+
+<script>
+const DEFAULT_SETTINGS = {
+    companyName: 'AssetVault Pro',
+    companySubtitle: 'Sistem Inventaris & Manajemen Aset Terpadu',
+    assetPrefix: 'AST-',
+    password: '555',
+    logo: '',
+    categories: ['Server & Jaringan', 'Komputer & Laptop', 'Periferal', 'Furnitur & Elektronik', 'Kendaraan', 'Lainnya']
+};
+
+const DEFAULT_ASSETS = [
+    {
+        id: 1, asset_code: 'AST-001', name: 'Server Dell PowerEdge R740', category: 'Server & Jaringan',
+        location: 'Ruang Server Lt. 1', condition: 'Baik', purchase_date: '2024-03-15',
+        value: 45000000, useful_life: 5, pic: 'Tim IT', notes: 'Main virtualization host',
+        logs: [{ id: 101, action_type: 'Registrasi Awal', description: 'Instalasi rack server dan konfigurasi sistem', cost: 0, created_at: '15/03/2024 09:00' }]
+    },
+    {
+        id: 2, asset_code: 'AST-002', name: 'MikroTik CCR2004-16G', category: 'Server & Jaringan',
+        location: 'Rak Utama MDF', condition: 'Baik', purchase_date: '2024-06-10',
+        value: 8500000, useful_life: 5, pic: 'Tim IT', notes: 'Core router & bandwidth management',
+        logs: [{ id: 102, action_type: 'Registrasi Awal', description: 'Konfigurasi failover ISP dan VLAN', cost: 0, created_at: '10/06/2024 14:20' }]
+    },
+    {
+        id: 3, asset_code: 'AST-003', name: 'MacBook Pro M3 14"', category: 'Komputer & Laptop',
+        location: 'Ruang Operasional', condition: 'Dipinjam', purchase_date: '2025-01-20',
+        value: 26000000, useful_life: 4, pic: 'Zaki', notes: 'Unit pengembangan aplikasi',
+        logs: [{ id: 103, action_type: 'Peminjaman', description: 'Dipinjam oleh Zaki (IT Dept)', cost: 0, created_at: '24/11/2026 08:30' }]
+    },
+    {
+        id: 4, asset_code: 'AST-004', name: 'Printer Epson L3210', category: 'Periferal',
+        location: 'Front Office', condition: 'Perbaikan', purchase_date: '2023-11-05',
+        value: 2300000, useful_life: 3, pic: 'Admin FO', notes: 'Head printer perlu cleaning',
+        logs: [{ id: 104, action_type: 'Perbaikan', description: 'Pengecekan head printer tersumbat di Front Office', cost: 150000, created_at: '20/11/2026 11:30' }]
+    }
+];
+
+const DEFAULT_LOANS = [
+    {
+        id: 501, asset_code: 'AST-003', asset_name: 'MacBook Pro M3 14"',
+        borrower: 'Zaki', department: 'IT & Sistem',
+        loan_date: '2026-11-24', due_date: '2026-11-30',
+        purpose: 'Presentasi sistem & deployment', status: 'Dipinjam', returned_at: ''
+    }
+];
+
+function assetApp() {
+    return {
+        isAuthenticated: false,
+        loginInput: '',
+        loginError: '',
+        activeTab: 'dashboard',
+
+        settings: {},
+        assets: [],
+        loans: [],
+        filters: { q: '', category: '', condition: '' },
+
+        // Modals
+        formModalOpen: false,
+        labelModalOpen: false,
+        detailModalOpen: false,
+        errorMsg: '',
+
+        // Forms & Active Items
+        form: {},
+        labelAsset: {},
+        detailAsset: {},
+        logForm: { action_type: 'Inspeksi Rutin', description: '', cost: '', new_condition: '', new_location: '' },
+        loanForm: { asset_code: '', borrower: '', department: '', loan_date: '', due_date: '', purpose: '' },
+        newCategoryName: '',
+
+        // Scanner
+        manualScanCode: '',
+        html5QrCode: null,
+        scannerRunning: false,
+
+        initApp() {
+            const savedSettings = localStorage.getItem('av_pro_settings');
+            this.settings = savedSettings ? JSON.parse(savedSettings) : structuredClone(DEFAULT_SETTINGS);
+
+            const savedAssets = localStorage.getItem('av_pro_assets');
+            this.assets = savedAssets ? JSON.parse(savedAssets) : structuredClone(DEFAULT_ASSETS);
+
+            const savedLoans = localStorage.getItem('av_pro_loans');
+            this.loans = savedLoans ? JSON.parse(savedLoans) : structuredClone(DEFAULT_LOANS);
+
+            this.persistAll();
+
+            // Cek sesi login
+            if (sessionStorage.getItem('av_pro_auth') === '1') {
+                this.isAuthenticated = true;
+                this.checkUrlScan();
+            }
+        },
+
+        persistAll() {
+            localStorage.setItem('av_pro_settings', JSON.stringify(this.settings));
+            localStorage.setItem('av_pro_assets', JSON.stringify(this.assets));
+            localStorage.setItem('av_pro_loans', JSON.stringify(this.loans));
+        },
+
+        handleLogin() {
+            if (this.loginInput === String(this.settings.password)) {
+                this.isAuthenticated = true;
+                this.loginError = '';
+                this.loginInput = '';
+                sessionStorage.setItem('av_pro_auth', '1');
+                this.checkUrlScan();
+            } else {
+                this.loginError = 'Password salah! (Default awal: 555)';
+            }
+        },
+
+        logout() {
+            this.stopCameraScanner();
+            this.isAuthenticated = false;
+            sessionStorage.removeItem('av_pro_auth');
+        },
+
+        checkUrlScan() {
+            const scanCode = new URLSearchParams(window.location.search).get('scan');
+            if (scanCode) {
+                setTimeout(() => this.openDetailModal(scanCode), 150);
+            }
+        },
+
+        switchTab(tab) {
+            if (this.activeTab === 'scanner' && tab !== 'scanner') {
+                this.stopCameraScanner();
+            }
+            this.activeTab = tab;
+            if (tab === 'loans') {
+                const today = new Date().toISOString().slice(0, 10);
+                const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+                this.loanForm = { asset_code: '', borrower: '', department: '', loan_date: today, due_date: nextWeek, purpose: '' };
+            }
+            if (tab === 'scanner') {
+                setTimeout(() => document.getElementById('hardware-scan-input')?.focus(), 100);
+            }
+        },
+
+        // Computed Properties
+        get filteredAssets() {
+            const q = this.filters.q.toLowerCase().trim();
+            return this.assets.filter(a => {
+                const matchQ = !q || [a.asset_code, a.name, a.location, a.pic].some(v => (v || '').toLowerCase().includes(q));
+                const matchCat = !this.filters.category || a.category === this.filters.category;
+                const matchCond = !this.filters.condition || a.condition === this.filters.condition;
+                return matchQ && matchCat && matchCond;
+            });
+        },
+
+        get availableAssets() {
+            return this.assets.filter(a => a.condition === 'Baik');
+        },
+
+        get activeLoansCount() {
+            return this.loans.filter(l => l.status === 'Dipinjam').length;
+        },
+
+        get summary() {
+            return this.assets.reduce((acc, a) => {
+                acc.totalItems++;
+                acc.totalValue += Number(a.value || 0);
+                acc.totalBookValue += this.calcBookValue(a);
+                if (a.condition === 'Baik') acc.countBaik++;
+                else if (a.condition === 'Dipinjam') acc.countDipinjam++;
+                else if (a.condition === 'Perbaikan') acc.countPerbaikan++;
+                else if (a.condition === 'Rusak') acc.countRusak++;
+                return acc;
+            }, { totalItems: 0, totalValue: 0, totalBookValue: 0, countBaik: 0, countDipinjam: 0, countPerbaikan: 0, countRusak: 0 });
+        },
+
+        get byCategory() {
+            const map = {};
+            this.assets.forEach(a => {
+                if (!map[a.category]) map[a.category] = { category: a.category, total: 0, totalValue: 0 };
+                map[a.category].total++;
+                map[a.category].totalValue += Number(a.value || 0);
+            });
+            return Object.values(map).sort((a, b) => b.totalValue - a.totalValue);
+        },
+
+        calcBookValue(item) {
+            const val = Number(item.value || 0);
+            const life = Number(item.useful_life || 5);
+            if (val <= 0 || life <= 0 || !item.purchase_date) return val;
+            const start = new Date(item.purchase_date);
+            const now = new Date();
+            if (now <= start) return val;
+            const elapsedYears = (now - start) / (1000 * 60 * 60 * 24 * 365.25);
+            if (elapsedYears >= life) return 0;
+            return Math.max(0, Math.round(val - ((val / life) * elapsedYears)));
+        },
+
+        // CRUD Aset
+        openFormModal(item = null) {
+            this.errorMsg = '';
+            if (item) {
+                this.form = { ...item };
+            } else {
+                const nextNum = String(this.assets.length + 1).padStart(3, '0');
+                const prefix = this.settings.assetPrefix || 'AST-';
+                this.form = {
+                    id: 0, asset_code: `${prefix}${nextNum}`, name: '',
+                    category: this.settings.categories[0] || 'Lainnya',
+                    location: '', condition: 'Baik', purchase_date: new Date().toISOString().slice(0, 10),
+                    value: 0, useful_life: 5, pic: '', notes: ''
+                };
+            }
+            this.formModalOpen = true;
+        },
+
+        saveAsset() {
+            const code = this.form.asset_code.trim().toUpperCase();
+            const dup = this.assets.find(a => a.asset_code === code && a.id !== this.form.id);
+            if (dup) {
+                this.errorMsg = 'Kode aset sudah terdaftar.';
+                return;
+            }
+            if (this.form.id) {
+                const idx = this.assets.findIndex(a => a.id === this.form.id);
+                this.assets[idx] = { ...this.assets[idx], ...this.form, asset_code: code, value: Number(this.form.value), useful_life: Number(this.form.useful_life) };
+            } else {
+                this.assets.unshift({
+                    ...this.form,
+                    id: Date.now(),
+                    asset_code: code,
+                    value: Number(this.form.value),
+                    useful_life: Number(this.form.useful_life),
+                    logs: [{ id: Date.now(), action_type: 'Registrasi Awal', description: 'Aset didaftarkan ke sistem', cost: 0, created_at: new Date().toLocaleString('id-ID') }]
+                });
+            }
+            this.persistAll();
+            this.formModalOpen = false;
+        },
+
+        deleteAsset(item) {
+            if (!confirm(`Hapus aset "${item.name}" (${item.asset_code})?`)) return;
+            this.assets = this.assets.filter(a => a.id !== item.id);
+            this.persistAll();
+        },
+
+        // Peminjaman Aset
+        quickLoan(item) {
+            this.switchTab('loans');
+            this.loanForm.asset_code = item.asset_code;
+        },
+
+        submitLoan() {
+            const idx = this.assets.findIndex(a => a.asset_code === this.loanForm.asset_code);
+            if (idx === -1) return;
+            const asset = this.assets[idx];
+
+            this.loans.unshift({
+                id: Date.now(),
+                asset_code: asset.asset_code,
+                asset_name: asset.name,
+                borrower: this.loanForm.borrower.trim(),
+                department: this.loanForm.department.trim(),
+                loan_date: this.loanForm.loan_date,
+                due_date: this.loanForm.due_date,
+                purpose: this.loanForm.purpose.trim(),
+                status: 'Dipinjam',
+                returned_at: ''
+            });
+
+            asset.condition = 'Dipinjam';
+            if (!asset.logs) asset.logs = [];
+            asset.logs.unshift({
+                id: Date.now() + 1,
+                action_type: 'Peminjaman',
+                description: `Dipinjam oleh ${this.loanForm.borrower} (${this.loanForm.department}) s/d ${this.loanForm.due_date}`,
+                cost: 0,
+                created_at: new Date().toLocaleString('id-ID')
+            });
+
+            this.persistAll();
+            this.switchTab('loans');
+        },
+
+        returnLoan(loan) {
+            if (!confirm(`Konfirmasi pengembalian aset ${loan.asset_code} dari ${loan.borrower}?`)) return;
+            loan.status = 'Dikembalikan';
+            loan.returned_at = new Date().toLocaleDateString('id-ID');
+
+            const idx = this.assets.findIndex(a => a.asset_code === loan.asset_code);
+            if (idx !== -1) {
+                this.assets[idx].condition = 'Baik';
+                this.assets[idx].logs.unshift({
+                    id: Date.now(),
+                    action_type: 'Pengembalian',
+                    description: `Dikembalikan oleh ${loan.borrower} dalam kondisi baik`,
+                    cost: 0,
+                    created_at: new Date().toLocaleString('id-ID')
+                });
+            }
+            this.persistAll();
+        },
+
+        // Barcode & QR Generator
+        openLabelModal(item) {
+            this.labelAsset = item;
+            this.labelModalOpen = true;
+            setTimeout(() => {
+                const qrContainer = document.getElementById('qrcode-container');
+                qrContainer.innerHTML = '';
+                const targetUrl = `${window.location.origin}${window.location.pathname}?scan=${encodeURIComponent(item.asset_code)}`;
+                new QRCode(qrContainer, { text: targetUrl, width: 150, height: 150, colorDark: '#0f172a', colorLight: '#ffffff' });
+
+                JsBarcode('#barcode-container', item.asset_code, {
+                    format: 'CODE128',
+                    width: 2,
+                    height: 45,
+                    displayValue: false,
+                    margin: 4
+                });
+            }, 50);
+        },
+
+        downloadQr() {
+            const canvas = document.querySelector('#qrcode-container canvas');
+            if (!canvas) return;
+            const link = document.createElement('a');
+            link.download = `QR-${this.labelAsset.asset_code}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        },
+
+        printLabel() {
+            const content = document.getElementById('printable-label').innerHTML;
+            const win = window.open('', '', 'width=360,height=450');
+            win.document.write(`<html><body style="font-family:sans-serif;text-align:center;padding:20px;">${content}</body></html>`);
+            win.document.close();
+            win.focus();
+            win.print();
+            win.close();
+        },
+
+        // Scanner Kamera & Barcode Gun
+        searchByScanCode() {
+            let code = this.manualScanCode.trim();
+            if (!code) return;
+            // Jika hasil scan berupa URL (?scan=AST-001), ekstrak kodenya
+            if (code.includes('scan=')) {
+                try {
+                    const urlObj = new URL(code);
+                    code = urlObj.searchParams.get('scan') || code;
+                } catch (e) {}
+            }
+            this.manualScanCode = '';
+            this.openDetailModal(code);
+        },
+
+        startCameraScanner() {
+            if (this.scannerRunning) return;
+            this.html5QrCode = new Html5Qrcode('reader');
+            this.scannerRunning = true;
+            this.html5QrCode.start(
+                { facingMode: 'environment' },
+                { fps: 10, qrbox: { width: 240, height: 160 } },
+                (decodedText) => {
+                    this.stopCameraScanner();
+                    this.manualScanCode = decodedText;
+                    this.searchByScanCode();
+                },
+                () => {}
+            ).catch(err => {
+                this.scannerRunning = false;
+                alert('Gagal membuka kamera: ' + err);
+            });
+        },
+
+        stopCameraScanner() {
+            if (this.html5QrCode && this.scannerRunning) {
+                this.html5QrCode.stop().then(() => {
+                    this.html5QrCode.clear();
+                    this.scannerRunning = false;
+                }).catch(() => { this.scannerRunning = false; });
+            }
+        },
+
+        // Detail & Log
+        openDetailModal(code) {
+            const found = this.assets.find(a => a.asset_code.toLowerCase() === code.toLowerCase());
+            if (!found) {
+                alert(`Aset dengan kode '${code}' tidak ditemukan.`);
+                return;
+            }
+            this.detailAsset = found;
+            this.logForm = { action_type: 'Inspeksi Rutin', description: '', cost: '', new_condition: '', new_location: '' };
+            this.detailModalOpen = true;
+        },
+
+        closeDetailModal() {
+            this.detailModalOpen = false;
+            if (window.location.search.includes('scan=')) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        },
+
+        saveLog() {
+            const idx = this.assets.findIndex(a => a.id === this.detailAsset.id);
+            if (idx === -1) return;
+            if (!this.assets[idx].logs) this.assets[idx].logs = [];
+            this.assets[idx].logs.unshift({
+                id: Date.now(),
+                action_type: this.logForm.action_type,
+                description: this.logForm.description,
+                cost: Number(this.logForm.cost || 0),
+                created_at: new Date().toLocaleString('id-ID')
+            });
+            if (this.logForm.new_condition) this.assets[idx].condition = this.logForm.new_condition;
+            if (this.logForm.new_location.trim()) this.assets[idx].location = this.logForm.new_location.trim();
+            this.detailAsset = { ...this.assets[idx] };
+            this.persistAll();
+            this.logForm = { action_type: 'Inspeksi Rutin', description: '', cost: '', new_condition: '', new_location: '' };
+        },
+
+        // Settings
+        handleLogoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const maxSize = 180;
+                    let w = img.width, h = img.height;
+                    if (w > h && w > maxSize) { h *= maxSize / w; w = maxSize; }
+                    else if (h > maxSize) { w *= maxSize / h; h = maxSize; }
+                    canvas.width = w;
+                    canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    this.settings.logo = canvas.toDataURL('image/png');
+                    this.saveSettings();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        },
+
+        addCategory() {
+            const name = this.newCategoryName.trim();
+            if (!name) return;
+            if (!this.settings.categories.includes(name)) {
+                this.settings.categories.push(name);
+                this.saveSettings();
+            }
+            this.newCategoryName = '';
+        },
+
+        removeCategory(index) {
+            if (this.settings.categories.length <= 1) {
+                alert('Minimal harus ada 1 kategori.');
+                return;
+            }
+            this.settings.categories.splice(index, 1);
+            this.saveSettings();
+        },
+
+        saveSettings() {
+            this.persistAll();
+            alert('Pengaturan berhasil disimpan!');
+        },
+
+        resetAllData() {
+            if (!confirm('Yakin mereset seluruh data dan pengaturan ke awal?')) return;
+            this.settings = structuredClone(DEFAULT_SETTINGS);
+            this.assets = structuredClone(DEFAULT_ASSETS);
+            this.loans = structuredClone(DEFAULT_LOANS);
+            this.persistAll();
+            alert('Data telah direset. Password kembali ke 555.');
+        },
+
+        exportCsv() {
+            const rows = [['Kode Aset', 'Nama Aset', 'Kategori', 'Lokasi', 'Status', 'Tgl Beli', 'Nilai Beli', 'Nilai Buku', 'PIC']];
+            this.assets.forEach(a => {
+                rows.push([a.asset_code, `"${a.name}"`, `"${a.category}"`, `"${a.location}"`, a.condition, a.purchase_date, a.value, this.calcBookValue(a), `"${a.pic}"`]);
+            });
+            const blob = new Blob([rows.map(r => r.join(',')).join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `inventaris-aset-${new Date().toISOString().slice(0, 10)}.csv`;
+            link.click();
+        },
+
+        formatRupiah(val) {
+            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val || 0);
+        }
+    }
+}
+</script>
+</body>
+</html>
